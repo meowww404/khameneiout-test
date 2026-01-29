@@ -9,12 +9,15 @@ from datetime import datetime, timedelta
 from . import SignalOutput
 
 
-# Regime-affiliated channels
+# Regime-affiliated channels (must be indexed in ClickHouse)
 REGIME_CHANNELS = [
-    'tasnimnews',
-    'FarsNewsAgency', 
-    'isnanews',
+    'Tasnimnews',
+    'farsna',
+    'SepahCybery',
 ]
+
+# Gaps beyond this are treated as "channel not indexed" / no recent data — don't factor into signal
+MAX_PLAUSIBLE_GAP_HOURS = 24  # 1 week
 
 
 class SilenceSignal:
@@ -68,8 +71,11 @@ class SilenceSignal:
                         last_post = datetime.fromisoformat(last_post)
                     hours_silent = (now - last_post).total_seconds() / 3600
                     silence_data[channel] = round(hours_silent, 2)
-                    max_silence_hours = max(max_silence_hours, hours_silent)
-                    channels_checked += 1
+                    # Only factor into index if gap is plausible (channel actually indexed recently)
+                    if hours_silent <= MAX_PLAUSIBLE_GAP_HOURS:
+                        max_silence_hours = max(max_silence_hours, hours_silent)
+                        channels_checked += 1
+                    # else: gap too long = channel not recently indexed, don't drive signal
                 else:
                     silence_data[channel] = "no_data"
             except Exception as e:
